@@ -4,7 +4,7 @@
 //#include <TFT_eSPI.h>
 #include <M5Display.h>                 // This library is a lot faster! But also a lot larger.
 
-#define TFT_CPU_CORE            0      // Select which core the tft task will run on.
+#define TFT_CPU_CORE            1      // Select which core the tft task will run on.
 
 #define microphone              34
 #define speaker                 25
@@ -64,6 +64,8 @@ void setup() {
 
   bufferFilled = false;
 
+  //if ( TFT_CPU_CORE == 0 ) disableCore0WDT();
+  //if ( TFT_CPU_CORE == 1 ) disableCore1WDT();
   xTaskCreatePinnedToCore(
     updateTFT,                       /* Function to implement the task */
     "updateTFT",                     /* Name of the task */
@@ -96,6 +98,7 @@ void updateTFT( void * pvParameters ) {
 
   while ( true ) {
     if ( bufferFilled ) {
+
       waveform.fillSprite( TFT_BLACK );
       for ( uint16_t counter = 1; counter < waveWidth; counter++ ) {
         waveform.drawLine( counter - 1,
@@ -104,7 +107,7 @@ void updateTFT( void * pvParameters ) {
                            map( vReal[counter], 0, 4096, 0, waveHeight ),
                            ILI9341_WHITE );
       }
-      waveform.pushSprite( 32, 130 );
+      waveform.pushSprite( 160 - ( bufferSize / 2 ), 130 );
 
       spectrum.fillScreen( TFT_BLACK );
       FFT.Windowing( vReal, bufferSize, FFT_WIN_TYP_HAMMING, FFT_FORWARD) ;
@@ -127,7 +130,6 @@ void updateTFT( void * pvParameters ) {
         peak[i] = 0;
       }
 
-
       currentSample.store( 0, std::memory_order_relaxed );
       bufferFilled = false;
       spectrum.pushSprite( 90, 10 );
@@ -147,5 +149,9 @@ void updateTFT( void * pvParameters ) {
 }
 
 static inline void displayBand( const int band, const int dsize ) {
-  spectrum.fillRect( band * 20 + 5, spectrumHeight - dsize / ( bufferSize  * 2.5 ) + 10 , 10, spectrumHeight, TFT_GREEN );
+  spectrum.fillRect( band * 20 + 5,
+                     max( spectrumHeight - dsize / ( bufferSize * 2 ) + 10, 0 ) ,
+                     10,
+                     spectrumHeight,
+                     TFT_GREEN );
 }
