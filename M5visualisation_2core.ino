@@ -22,6 +22,7 @@
 
 double vReal[bufferSize];
 double vImag[bufferSize];
+uint32_t peak[8];
 
 /* shared between ISR and main program */
 std::atomic<std::uint16_t> currentSample{0};
@@ -62,6 +63,7 @@ void setup() {
   //esp_wifi_set_mode(WIFI_MODE_NULL);
 
   bufferFilled = false;
+
   xTaskCreatePinnedToCore(
     updateTFT,                       /* Function to implement the task */
     "updateTFT",                     /* Name of the task */
@@ -109,16 +111,22 @@ void updateTFT( void * pvParameters ) {
       FFT.Compute( vReal, vImag, bufferSize, FFT_FORWARD );
       FFT.ComplexToMagnitude( vReal, vImag, bufferSize );
       // The binning code was copied from https://github.com/G6EJD/ESP32-8266-Audio-Spectrum-Display/blob/master/ESP32_Spectrum_Display_02.ino
-      for ( int i = 2; i < ( bufferSize / 2); i++ ) {
-        if (i <= 2 )             displayBand(0, (int)vReal[i]); // 125Hz
-        if (i > 2   && i <= 4 )   displayBand(1, (int)vReal[i]); // 250Hz
-        if (i > 4   && i <= 7 )   displayBand(2, (int)vReal[i]); // 500Hz
-        if (i > 7   && i <= 15 )  displayBand(3, (int)vReal[i]); // 1000Hz
-        if (i > 15  && i <= 40 )  displayBand(4, (int)vReal[i]); // 2000Hz
-        if (i > 40  && i <= 70 )  displayBand(5, (int)vReal[i]); // 4000Hz
-        if (i > 70  && i <= 288 ) displayBand(6, (int)vReal[i]); // 8000Hz
-        if (i > 288           ) displayBand(7, (int)vReal[i]); // 16000Hz
+      for ( int i = 2; i < ( bufferSize / 2 ); i++ ) {
+        if (i <= 2              && ( peak[0] < vReal[i] ) ) peak[0] = vReal[i]; // 125Hz
+        if (i > 3   && i <= 5   && ( peak[1] < vReal[i] ) ) peak[1] = vReal[i]; // 250Hz
+        if (i > 5   && i <= 7   && ( peak[2] < vReal[i] ) ) peak[2] = vReal[i]; // 500Hz
+        if (i > 7   && i <= 15  && ( peak[3] < vReal[i] ) ) peak[3] = vReal[i]; // 1000Hz
+        if (i > 15  && i <= 30  && ( peak[4] < vReal[i] ) ) peak[4] = vReal[i]; // 2000Hz
+        if (i > 30  && i <= 53  && ( peak[5] < vReal[i] ) ) peak[5] = vReal[i]; // 4000Hz
+        if (i > 53  && i <= 200 && ( peak[6] < vReal[i] ) ) peak[6] = vReal[i]; // 8000Hz
+        if (i > 200             && ( peak[7] < vReal[i] ) ) peak[7] = vReal[i]; // 16000Hz
       }
+
+      for ( int i = 0; i < sizeof(peak); i++ ) {
+        displayBand( i, peak[i] );
+        peak[i] = 0;
+      }
+
 
       currentSample.store( 0, std::memory_order_relaxed );
       bufferFilled = false;
