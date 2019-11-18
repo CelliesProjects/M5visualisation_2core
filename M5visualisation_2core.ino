@@ -4,7 +4,7 @@
 //#include <TFT_eSPI.h>
 #include <M5Display.h>                 // This library is a lot faster! But also a lot larger.
 
-#define TFT_CPU_CORE            1      // Select which core the tft task will run on.
+#define TFT_CPU_CORE            0      // Select which core the tft task will run on.
 
 #define microphone              34
 #define speaker                 25
@@ -30,11 +30,11 @@ std::atomic<bool>          bufferFilled;
 
 static hw_timer_t *        sampleTimer = NULL;
 
-unsigned int sampling_period_us = round( 1000000 * ( 1.0 / SAMPLING_FREQUENCY ) );
+const unsigned int sampling_period_us = round( 1000000 * ( 1.0 / SAMPLING_FREQUENCY ) );
 
 arduinoFFT  FFT      = arduinoFFT();
 TFT_eSPI    tft      = TFT_eSPI();
-TFT_eSprite spectrum = TFT_eSprite(&tft);
+TFT_eSprite vumeter  = TFT_eSprite(&tft);
 TFT_eSprite waveform = TFT_eSprite(&tft);
 
 static void IRAM_ATTR _sampleISR() {
@@ -64,7 +64,7 @@ void setup() {
 
   bufferFilled = false;
 
-  //if ( TFT_CPU_CORE == 0 ) disableCore0WDT();
+  if ( TFT_CPU_CORE == 0 ) disableCore0WDT();
   //if ( TFT_CPU_CORE == 1 ) disableCore1WDT();
   xTaskCreatePinnedToCore(
     updateTFT,                       /* Function to implement the task */
@@ -91,8 +91,8 @@ void updateTFT( void * pvParameters ) {
   tft.setTextSize( 2 );
   tft.setCursor( 75, 105 );
 
-  spectrum.createSprite( spectrumWidth, spectrumHeight );
-  spectrum.setColorDepth( 8 );
+  vumeter.createSprite( spectrumWidth, spectrumHeight );
+  vumeter.setColorDepth( 8 );
   waveform.createSprite( waveWidth, waveHeight );
   waveform.setColorDepth( 8 );
 
@@ -109,13 +109,13 @@ void updateTFT( void * pvParameters ) {
       }
       waveform.pushSprite( 160 - ( bufferSize / 2 ), 130 );
 
-      spectrum.fillScreen( TFT_BLACK );
+      vumeter.fillScreen( TFT_BLACK );
       FFT.Windowing( vReal, bufferSize, FFT_WIN_TYP_HAMMING, FFT_FORWARD) ;
       FFT.Compute( vReal, vImag, bufferSize, FFT_FORWARD );
       FFT.ComplexToMagnitude( vReal, vImag, bufferSize );
       // The binning code was copied from https://github.com/G6EJD/ESP32-8266-Audio-Spectrum-Display/blob/master/ESP32_Spectrum_Display_02.ino
       for ( int i = 2; i < ( bufferSize / 2 ); i++ ) {
-        if (i <= 2              && ( peak[0] < vReal[i] ) ) peak[0] = vReal[i]; // 125Hz
+        if (i <= 3              && ( peak[0] < vReal[i] ) ) peak[0] = vReal[i]; // 125Hz
         if (i > 3   && i <= 5   && ( peak[1] < vReal[i] ) ) peak[1] = vReal[i]; // 250Hz
         if (i > 5   && i <= 7   && ( peak[2] < vReal[i] ) ) peak[2] = vReal[i]; // 500Hz
         if (i > 7   && i <= 15  && ( peak[3] < vReal[i] ) ) peak[3] = vReal[i]; // 1000Hz
@@ -132,8 +132,9 @@ void updateTFT( void * pvParameters ) {
 
       currentSample.store( 0, std::memory_order_relaxed );
       bufferFilled = false;
-      spectrum.pushSprite( 90, 10 );
+      vumeter.pushSprite( 90, 10 );
     }
+
     static time_t previous;
     static uint16_t fps;
     if ( time( NULL ) != previous ) {
@@ -144,14 +145,15 @@ void updateTFT( void * pvParameters ) {
     }
     fps++;
 
-    delay(1);
+    //delay(1);
   }
 }
 
 static inline void displayBand( const int band, const int dsize ) {
-  spectrum.fillRect( band * 20 + 5,
-                     max( spectrumHeight - dsize / ( bufferSize * 2 ) + 10, 0 ) ,
-                     10,
-                     spectrumHeight,
-                     TFT_GREEN );
+
+  vumeter.fillRect( band * 20 + 5,
+                    max( spectrumHeight - dsize / ( bufferSize * 2 ) + 10, 0 ) ,
+                    10,
+                    spectrumHeight,
+                    TFT_GREEN );
 }
